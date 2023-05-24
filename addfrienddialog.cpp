@@ -20,7 +20,7 @@ AddFriendDialog::~AddFriendDialog()
 void AddFriendDialog::on_pushButton_find_clicked()
 {
     ChatLogInfo()<<"on_pushButton_find_clicked in..";
-    emit sendSearchMessageRequest(ui->lineEdit->text().toStdString());
+    emit sendSearchMessageRequest(ui->lineEdit_account->text().toStdString());
 }
 
 void AddFriendDialog::onSearchResponseReceived(const std::vector<std::string> &usernames)

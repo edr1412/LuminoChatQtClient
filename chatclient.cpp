@@ -164,10 +164,9 @@ void ChatClient::onGroupResponse(const TcpConnectionPtr &conn,
                       Timestamp)
 {
     ChatLogInfo() << "onGroupResponse: " << QString::fromStdString(message->GetTypeName());
-
+    std::string operation;
     if (message->success())
     {
-        std::string operation;
         switch (message->operation()) {
             case chat::GroupOperation::CREATE:
                 operation = "Create group";
@@ -199,7 +198,7 @@ void ChatClient::onGroupResponse(const TcpConnectionPtr &conn,
                 groups.push_back(group);
         }
     }
-        emit groupResponseReceived(message->success(), message->operation(), message->error_message(), groups);
+        emit groupResponseReceived(message->success(), operation, message->error_message(), groups);
 }
 
 void ChatClient::onTextMessage(const TcpConnectionPtr &conn,
@@ -225,3 +224,136 @@ void ChatClient::onUnknownMessageType(const TcpConnectionPtr &conn,
 {
     ChatLogInfo() << "onUnknownMessageType: " << QString::fromStdString(message->GetTypeName());
 }
+
+  void ChatClient::processCommand(const std::string &line)
+  {
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+    MutexLockGuard lock(username_mutex_);
+
+    if (cmd == "register")
+    {
+      std::string username, password;
+      iss >> username >> password;
+      chat::RegisterRequest request;
+      request.set_username(username);
+      request.set_password(password);
+      codec_.send(connection_, request);
+    }
+    else if (cmd == "login")
+    {
+      std::string username, password;
+      iss >> username >> password;
+      // 如果再次登录自己，则退出
+      if (username == username_) {
+          return;
+      }
+      // 如果已经登录，要登录其他用户，则先登出
+      if (username_ != "guest") {
+          chat::LogoutRequest request;
+          request.set_username(username_);
+          codec_.send(connection_, request);
+          username_ = "guest";
+      }
+      chat::LoginRequest request;
+      request.set_username(username);
+      request.set_password(password);
+      codec_.send(connection_, request);
+    }
+    else if (cmd == "send")
+    {
+      std::string target_type, target, content;
+      iss >> target_type >> target;
+      std::getline(iss, content);
+      chat::TextMessage textMessage;
+      textMessage.set_sender(username_);
+      textMessage.set_content(content);
+      if (target_type == "user")
+      {
+        textMessage.set_target_type(chat::TargetType::USER);
+      }
+      else if (target_type == "group")
+      {
+        textMessage.set_target_type(chat::TargetType::GROUP);
+      }
+      else
+      {
+        LOG_ERROR << "Unknown target type: " << target_type;
+        LOG_INFO << "Usage: send <user|group> <target> <content>";
+        return;
+      }
+      textMessage.set_target(target);
+      codec_.send(connection_, textMessage);
+    }
+    else if (cmd == "search")
+    {
+      std::string keyword;
+      iss >> keyword;
+      chat::SearchRequest request;
+      request.set_keyword(keyword);
+      request.set_online_only(false);
+      codec_.send(connection_, request);
+    }
+    else if (cmd == "search-online")
+    {
+      std::string keyword;
+      iss >> keyword;
+      chat::SearchRequest request;
+      request.set_keyword(keyword);
+      request.set_online_only(true);
+      codec_.send(connection_, request);
+    }
+    else if (cmd == "group")
+    {
+      // 如果还没有登录，则不能操作群组
+      if (username_ == "guest") {
+        LOG_ERROR << "Please login first";
+        return;
+      }
+      std::string operation, group_name;
+      iss >> operation >> group_name;
+      chat::GroupRequest request;
+      request.set_group_name(group_name);
+      request.set_username(username_);
+
+      if (operation == "create")
+      {
+        request.set_operation(chat::GroupOperation::CREATE);
+      }
+      else if (operation == "join")
+      {
+        request.set_operation(chat::GroupOperation::JOIN);
+      }
+      else if (operation == "leave")
+      {
+        request.set_operation(chat::GroupOperation::LEAVE);
+      }
+      else if (operation == "query")
+      {
+        request.set_operation(chat::GroupOperation::QUERY);
+      }
+      else
+      {
+        LOG_ERROR << "Unknown group operation: " << operation;
+        LOG_INFO << "Usage: group <create|join|leave|query> <groupname>";
+        return;
+      }
+      codec_.send(connection_, request);
+    }
+    else if (cmd == "logout")
+    {
+      if (username_ != "guest") {
+          chat::LogoutRequest request;
+          request.set_username(username_);
+          codec_.send(connection_, request);
+          username_ = "guest";
+      } else {
+          LOG_ERROR << "You are not logged in!";
+      }
+    }
+    else
+    {
+      LOG_ERROR << "Unknown command: " << cmd;
+    }
+  }

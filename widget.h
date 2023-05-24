@@ -52,7 +52,6 @@ public slots:
     void onSendLoginMessageRequest(const std::string &username, const std::string &password);
     void onSendRegistMessageRequest(const std::string &username, const std::string &password);
 private slots:
-    int handleMsg(recvMsg *rMsg);
     void on_pushBtn_send_clicked();
     void on_pushButton_addFriend_clicked();
 
@@ -85,6 +84,7 @@ private:
     ChatClient client_;
     bool        hasLogin_;
     bool        m_isfull;
+    std::string username_;
     QRect       m_rect;
 
     mapChatWidget           m_chatWigetMapPrivate;     //用户名, QListWidget*

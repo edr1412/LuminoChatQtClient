@@ -13,8 +13,10 @@ Widget::Widget(QWidget *parent)
     loopThread_(),
     serverAddr_(SERVER_ADDR, SERVER_PORT),
     client_(loopThread_.startLoop(), serverAddr_),
-    hasLogin_(false)
+    hasLogin_(false),
+    username_("guest")
 {
+    client_.connect();
     ui->setupUi(this);
     InitUI();
     Init();
@@ -54,13 +56,13 @@ void Widget::InitUI()
 void Widget::Init()
 {
     connect(&client_, &ChatClient::loginResponseReceived, this, &Widget::onLoginResponseReceived);
-    connect(&client_, &ChatClient::registerResponseReceived, this, &Widget::onRegisterResponseReceived);
+    connect(&client_, &ChatClient::registerResponseReceived, this, &Widget::onRegistResponseReceived);
     connect(&client_, &ChatClient::textMessageReceived, this, &Widget::onTextMessageReceived);
     connect(&client_, &ChatClient::groupResponseReceived, this, &Widget::onGroupResponseReceived);
     
     LoginDlg* loginDlg = new LoginDlg;
     connect(loginDlg, &LoginDlg::sendLoginMessageRequest, this, &Widget::onSendLoginMessageRequest);
-    connect(loginDlg, &LoginDlg::sendRegistMessageRequest, this, &Widget::onSendRegistMessageRequest);
+    connect(loginDlg, &LoginDlg::sendRegistMessageRequestAsProxy, this, &Widget::onSendRegistMessageRequest);
     loginDlg->setAttribute(Qt::WA_DeleteOnClose);
     loginDlg->show();
     int status = loginDlg->exec();
@@ -77,13 +79,14 @@ void Widget::Init()
 
 void Widget::onLoginResponseReceived(bool success, const std::string &username)
 {
+    ChatLogInfo()<<"onLoginResponseReceived";
     if (success)
     {
         this->hasLogin_ = true;
         this->username_ = username;
         this->setWindowTitle(QString("WeChat[%1]").arg(QString::fromStdString(username)));
         std::string command = "group query";
-        ChatLogInfo()<<"command: "<<command;
+        ChatLogInfo()<<"command: "<<QString::fromStdString(command);
         client_.send(command);
         this->show();
     }
@@ -105,6 +108,7 @@ void Widget::onLoginResponseReceived(bool success, const std::string &username)
         {
             ChatLogInfo()<<"close..";
             this->hasLogin_ = false;
+            this->close();
         }
     }
 }
@@ -125,7 +129,7 @@ static int stackWidgetIndex = 0;
 
 void Widget::Add_Group_Item(const std::string& group)
 {
-    ui->listWidget_info->addItem(QString("[群][%1]").arg(group));
+    ui->listWidget_info->addItem(QString("[群][%1]").arg(group.c_str()));
 
     ui->stackedWidget_Msg->setCurrentIndex(stackWidgetIndex++);
     if(stackWidgetIndex >=ui->stackedWidget_Msg->count())
@@ -158,7 +162,7 @@ void Widget::Add_Group_Item(const std::string& group)
 
 void Widget::Add_Friend_Item(const std::string& username)
 {
-    ui->listWidget_info->addItem(QString("[好友][%1]").arg(username));
+    ui->listWidget_info->addItem(QString("[好友][%1]").arg(username.c_str()));
 
     // 记录当前 stackedWidget_Msg 的index 和 listWidget_info的row
     int index = ui->stackedWidget_Msg->currentIndex();
@@ -210,7 +214,7 @@ void Widget::onTextMessageReceived(bool is_group, const std::string &group, cons
         QListWidget* chatWidget = iter->second;
         QListWidgetItem* item = new QListWidgetItem;
         //这里转码，中文名称显示乱码
-        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender.c_str()).arg(content.c_str()));
         item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         chatWidget->addItem(item);
     }
@@ -227,7 +231,7 @@ void Widget::onTextMessageReceived(bool is_group, const std::string &group, cons
         QListWidget* chatWidget = iter->second;
         QListWidgetItem* item = new QListWidgetItem;
         //这里转码，中文名称显示乱码
-        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender.c_str()).arg(content.c_str()));
         item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         chatWidget->addItem(item);
     }
@@ -237,7 +241,7 @@ void Widget::onGroupResponseReceived(bool success, const std::string& operation,
 {
     if(!success)
     {
-        QMessageBox::information(this, operation + "错误", QString::fromStdString(error_message));
+        QMessageBox::information(this, "错误", QString::fromStdString(operation+"失败： "+error_message));
     }
     // 遍历groups，检查m_chatWigetMapGroup中是否存在，不存在则执行Add_Group_Item
     for(auto group : groups)
@@ -288,20 +292,20 @@ void Widget::on_pushBtn_send_clicked()
     ui->textEdit->clear();
     if(chatInfo->m_type == TYPE_GROUP_CHAT){
         ChatLogInfo()<<"群聊";
-        std::string command = "send group " + std::to_string(chatInfo->m_account) + " " + msg_to_send;
-        ChatLogInfo()<<"command:"<<command;
+        std::string command = "send group " + chatInfo->m_account + " " + msg_to_send;
+        ChatLogInfo()<<"command:"<<command.c_str();
         client_.send(command);
     }
     else{
         ChatLogInfo()<<"私聊";
-        std::string command = "send " + std::to_string(chatInfo->m_account) + " " + msg_to_send;
-        ChatLogInfo()<<"command:"<<command;
+        std::string command = "send " + chatInfo->m_account + " " + msg_to_send;
+        ChatLogInfo()<<"command:"<<command.c_str();
         client_.send(command);
         mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(chatInfo->m_account);
         if(iter!=m_chatWigetMapPrivate.end()){
             chatWidget = iter->second;
             QString msg;
-            msg.sprintf("[%s]:%s", username_, msg_to_send.c_str());
+            msg.sprintf("[%s]:%s", username_.c_str(), msg_to_send.c_str());
             chatWidget->addItem(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + msg);
         }
         else {
@@ -315,7 +319,7 @@ void Widget::on_pushBtn_send_clicked()
 void Widget::on_pushButton_addFriend_clicked()
 {
     AddFriendDialog* addFriendDlg = new AddFriendDialog();
-    connect(&client_, &ChatClient::searchResponseReceived, addFriendDlg, &Widget::onSearchResponseReceived);
+    connect(&client_, &ChatClient::searchResponseReceived, addFriendDlg, &AddFriendDialog::onSearchResponseReceived);
     connect(addFriendDlg, &AddFriendDialog::sendSearchMessageRequest, this, &Widget::onSendSearchMessageRequest);
 
     addFriendDlg->show();
@@ -330,14 +334,14 @@ void Widget::onSendSearchMessageRequest(const std::string &pattern)
 {
     ChatLogInfo()<<"onSendSearchMessageRequest";
     std::string command = "search " + pattern;
-    ChatLogInfo()<<"command:"<<command;
+    ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }
 void Widget::onSendLoginMessageRequest(const std::string &username, const std::string &password)
 {
     ChatLogInfo()<<"onSendLoginMessageRequest";
     std::string command = "login " + username + " " + password;
-    ChatLogInfo()<<"command:"<<command;
+    ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }
 
@@ -345,7 +349,7 @@ void Widget::onSendRegistMessageRequest(const std::string &username, const std::
 {
     ChatLogInfo()<<"onSendRegistMessageRequest";
     std::string command = "register " + username + " " + password;
-    ChatLogInfo()<<"command:"<<command;
+    ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }
 
