@@ -2,6 +2,7 @@
 #define CHATCLIENT_H
 
 #include <QObject>
+#include <QStringList>
 #include "codec.h"
 #include "dispatcher.h"
 #include "chat.pb.h"
@@ -43,13 +44,13 @@ public:
     void send(const std::string &line);
 
 signals:
-    void loginResponseReceived(bool success, const std::string &username);
+    void loginResponseReceived(bool success, const QString &username);
     void logoutResponseReceived(bool success);
     void registerResponseReceived(bool success);
-    void textMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content);
+    void textMessageReceived(bool is_group, const QString &group, const QString &sender, const QString &content);
     void textMessageResponseReceived(bool success);
-    void searchResponseReceived(const std::vector<std::string> &usernames);
-    void groupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups);
+    void searchResponseReceived(const QStringList &usernames);
+    void groupResponseReceived(bool success, const QString& operation, const QString& error_message, const QStringList &groups);
 
 private:
     void processCommand(const std::string &line);

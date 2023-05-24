@@ -85,10 +85,14 @@ void LoginDlg::mouseMoveEvent(QMouseEvent *event)
 
 void LoginDlg::on_pushbtn_regist_clicked()
 {
-    RegistDlg* registDlg = new RegistDlg(this);
+    ChatLogInfo()<<"on_pushbtn_regist_clicked";
+    RegistDlg* registDlg = new RegistDlg();
+    ChatLogInfo()<<"registDlg";
     connect(registDlg, &RegistDlg::sendRegistMessageRequest, this, &LoginDlg::onSendRegistMessageRequestAsProxy);
     registDlg->setAttribute(Qt::WA_DeleteOnClose);
+    ChatLogInfo()<<"registDlg->show()";
     registDlg->show();
+    ChatLogInfo()<<"registDlg->exec()";
     int status = registDlg->exec();
     if (status == QDialog::Accepted)
     {
@@ -100,7 +104,7 @@ void LoginDlg::on_pushbtn_regist_clicked()
     }
 }
 
-void LoginDlg::onSendRegistMessageRequestAsProxy(const std::string &username, const std::string &password)
+void LoginDlg::onSendRegistMessageRequestAsProxy(const QString &username, const QString &password)
 {
     ChatLogInfo()<<"onSendRegistMessageRequestAsProxy";
     emit sendRegistMessageRequestAsProxy(username, password);
@@ -116,7 +120,7 @@ void LoginDlg::on_pushButton_login_clicked()
         QMessageBox::warning(this,"警告","账号或密码不能为空！");
         return;
     }
-    emit sendLoginMessageRequest(username, password);
+    emit sendLoginMessageRequest(QString::fromStdString(username), QString::fromStdString(password));
     return accept();    //Closes the dialog and emits the accepted() signal.
 }
 

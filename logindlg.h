@@ -29,10 +29,10 @@ public:
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
 
 signals:
-    void sendLoginMessageRequest(const std::string &username, const std::string &password);
-    void sendRegistMessageRequestAsProxy(const std::string &username, const std::string &password);
+    void sendLoginMessageRequest(const QString &username, const QString &password);
+    void sendRegistMessageRequestAsProxy(const QString &username, const QString &password);
 public slots:
-    void onSendRegistMessageRequestAsProxy(const std::string &username, const std::string &password);
+    void onSendRegistMessageRequestAsProxy(const QString &username, const QString &password);
 private slots:
     void on_pushbtn_regist_clicked();
 

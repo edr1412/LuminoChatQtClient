@@ -25,7 +25,7 @@ public:
     QPoint mouseDeskTopLeft;   //鼠标相对于桌面左上角坐标         在mouseMoveEvent实时获取
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
 signals:
-    void sendRegistMessageRequest(const std::string &username, const std::string &password);
+    void sendRegistMessageRequest(const QString &username, const QString &password);
 
 private slots:
     void on_pushBtn_regist_clicked();

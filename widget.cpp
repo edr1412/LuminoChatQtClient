@@ -77,14 +77,14 @@ void Widget::Init()
     }
 }
 
-void Widget::onLoginResponseReceived(bool success, const std::string &username)
+void Widget::onLoginResponseReceived(bool success, const QString &username)
 {
     ChatLogInfo()<<"onLoginResponseReceived";
     if (success)
     {
         this->hasLogin_ = true;
-        this->username_ = username;
-        this->setWindowTitle(QString("WeChat[%1]").arg(QString::fromStdString(username)));
+        this->username_ = username.toStdString();
+        this->setWindowTitle(QString("WeChat[%1]").arg(username));
         std::string command = "group query";
         ChatLogInfo()<<"command: "<<QString::fromStdString(command);
         client_.send(command);
@@ -199,14 +199,14 @@ void Widget::Add_Friend_Item(const std::string& username)
     ui->listWidget_info->setCurrentRow(row);
 }
 
-void Widget::onTextMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content)
+void Widget::onTextMessageReceived(bool is_group, const QString &group, const QString &sender, const QString &content)
 {
     if(is_group)
     {
-        mapChatWidget::iterator iter = m_chatWigetMapGroup.find(group);
+        mapChatWidget::iterator iter = m_chatWigetMapGroup.find(group.toStdString());
         if(iter==m_chatWigetMapGroup.end()){
-            Add_Group_Item(group);
-            iter = m_chatWigetMapGroup.find(group);
+            Add_Group_Item(group.toStdString());
+            iter = m_chatWigetMapGroup.find(group.toStdString());
             if(iter==m_chatWigetMapGroup.end()){
                 QMessageBox::information(this, "错误", "添加群聊失败");
             }
@@ -214,16 +214,16 @@ void Widget::onTextMessageReceived(bool is_group, const std::string &group, cons
         QListWidget* chatWidget = iter->second;
         QListWidgetItem* item = new QListWidgetItem;
         //这里转码，中文名称显示乱码
-        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender.c_str()).arg(content.c_str()));
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
         item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         chatWidget->addItem(item);
     }
     else
     {
-        mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(sender);
+        mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(sender.toStdString());
         if(iter==m_chatWigetMapPrivate.end()){
-            Add_Friend_Item(sender);
-            iter = m_chatWigetMapPrivate.find(sender);
+            Add_Friend_Item(sender.toStdString());
+            iter = m_chatWigetMapPrivate.find(sender.toStdString());
             if(iter==m_chatWigetMapPrivate.end()){
                 QMessageBox::information(this, "错误", "添加私聊失败");
             }
@@ -231,31 +231,32 @@ void Widget::onTextMessageReceived(bool is_group, const std::string &group, cons
         QListWidget* chatWidget = iter->second;
         QListWidgetItem* item = new QListWidgetItem;
         //这里转码，中文名称显示乱码
-        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender.c_str()).arg(content.c_str()));
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
         item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         chatWidget->addItem(item);
     }
 }
 
-void Widget::onGroupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups)
+void Widget::onGroupResponseReceived(bool success, const QString& operation, const QString& error_message, const QStringList &groups)
 {
     if(!success)
     {
-        QMessageBox::information(this, "错误", QString::fromStdString(operation+"失败： "+error_message));
+        QMessageBox::information(this, "错误", operation+"失败： "+error_message);
     }
     // 遍历groups，检查m_chatWigetMapGroup中是否存在，不存在则执行Add_Group_Item
-    for(auto group : groups)
+    for(const auto &group : groups)
     {
-        mapChatWidget::iterator iter = m_chatWigetMapGroup.find(group);
+        auto iter = m_chatWigetMapGroup.find(group.toStdString());
         if(iter==m_chatWigetMapGroup.end()){
-            Add_Group_Item(group);
-            iter = m_chatWigetMapGroup.find(group);
+            Add_Group_Item(group.toStdString());
+            iter = m_chatWigetMapGroup.find(group.toStdString());
             if(iter==m_chatWigetMapGroup.end()){
                 QMessageBox::information(this, "错误", "添加群聊失败");
             }
         }
     }
 }
+
 
 void Widget::on_pushBtn_send_clicked()
 {
@@ -298,7 +299,7 @@ void Widget::on_pushBtn_send_clicked()
     }
     else{
         ChatLogInfo()<<"私聊";
-        std::string command = "send " + chatInfo->m_account + " " + msg_to_send;
+        std::string command = "send user " + chatInfo->m_account + " " + msg_to_send;
         ChatLogInfo()<<"command:"<<command.c_str();
         client_.send(command);
         mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(chatInfo->m_account);
@@ -330,25 +331,25 @@ void Widget::on_pushButton_addFriend_clicked()
     }
 }
 
-void Widget::onSendSearchMessageRequest(const std::string &pattern)
+void Widget::onSendSearchMessageRequest(const QString &pattern)
 {
     ChatLogInfo()<<"onSendSearchMessageRequest";
-    std::string command = "search " + pattern;
+    std::string command = "search " + pattern.toStdString();
     ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }
-void Widget::onSendLoginMessageRequest(const std::string &username, const std::string &password)
+void Widget::onSendLoginMessageRequest(const QString &username, const QString &password)
 {
     ChatLogInfo()<<"onSendLoginMessageRequest";
-    std::string command = "login " + username + " " + password;
+    std::string command = "login " + username.toStdString() + " " + password.toStdString();
     ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }
 
-void Widget::onSendRegistMessageRequest(const std::string &username, const std::string &password)
+void Widget::onSendRegistMessageRequest(const QString &username, const QString &password)
 {
     ChatLogInfo()<<"onSendRegistMessageRequest";
-    std::string command = "register " + username + " " + password;
+    std::string command = "register " + username.toStdString() + " " + password.toStdString();
     ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }

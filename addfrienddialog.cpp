@@ -20,15 +20,17 @@ AddFriendDialog::~AddFriendDialog()
 void AddFriendDialog::on_pushButton_find_clicked()
 {
     ChatLogInfo()<<"on_pushButton_find_clicked in..";
-    emit sendSearchMessageRequest(ui->lineEdit_account->text().toStdString());
+    emit sendSearchMessageRequest(ui->lineEdit_account->text());
 }
 
-void AddFriendDialog::onSearchResponseReceived(const std::vector<std::string> &usernames)
+void AddFriendDialog::onSearchResponseReceived(const QStringList &usernames)
 {
     ChatLogInfo()<<"onSearchResponseReceived";
+    ui->widget_friendInfo->show();
     ui->listWidget->clear();
     for (const auto &username : usernames) {
-        ui->listWidget->addItem(QString::fromStdString(username));
+        ChatLogInfo()<< username;
+        ui->listWidget->addItem(new QListWidgetItem(username));
     }
 }
 

@@ -3,6 +3,7 @@
 
 #include <QListWidget>
 #include <QWidget>
+#include <QStringList>
 #include "common.h"
 #include "logindlg.h"
 #include "addfrienddialog.h"
@@ -44,13 +45,13 @@ public:
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
 
 public slots:
-    void onLoginResponseReceived(bool success, const std::string &username);
+    void onLoginResponseReceived(bool success, const QString &username);
     void onRegistResponseReceived(bool success);
-    void onTextMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content);
-    void onGroupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups);
-    void onSendSearchMessageRequest(const std::string &pattern);
-    void onSendLoginMessageRequest(const std::string &username, const std::string &password);
-    void onSendRegistMessageRequest(const std::string &username, const std::string &password);
+    void onTextMessageReceived(bool is_group, const QString &group, const QString &sender, const QString &content);
+    void onGroupResponseReceived(bool success, const QString& operation, const QString& error_message, const QStringList &groups);
+    void onSendSearchMessageRequest(const QString &pattern);
+    void onSendLoginMessageRequest(const QString &username, const QString &password);
+    void onSendRegistMessageRequest(const QString &username, const QString &password);
 private slots:
     void on_pushBtn_send_clicked();
     void on_pushButton_addFriend_clicked();

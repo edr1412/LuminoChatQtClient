@@ -70,7 +70,7 @@ void RegistDlg::on_pushBtn_regist_clicked()
         QMessageBox::warning(this,"警告","账号或密码不能为空！");
         return;
     }
-    emit sendRegistMessageRequest(username,password);
+    emit sendRegistMessageRequest(QString::fromStdString(username),QString::fromStdString(password));
     return accept();    //Closes the dialog and emits the accepted() signal.
 }
 

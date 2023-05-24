@@ -101,12 +101,12 @@ void ChatClient::onLoginResponse(const TcpConnectionPtr &conn,
             MutexLockGuard lock(username_mutex_);
       username_ = message->username();
         }
-      emit loginResponseReceived(true, message->username());
+      emit loginResponseReceived(true, QString::fromStdString(message->username()));
     }
     else
     {
         ChatLogInfo() << "Login failed: " << QString::fromStdString(message->error_message());
-      emit loginResponseReceived(false, message->error_message());
+      emit loginResponseReceived(true, QString::fromStdString(message->username()));
     }
 }
 
@@ -151,10 +151,10 @@ void ChatClient::onSearchResponse(const TcpConnectionPtr &conn,
                         Timestamp)
 {
     ChatLogInfo() << "onSearchResponse: " << QString::fromStdString(message->GetTypeName());
-    std::vector<std::string> usernames;
+    QStringList usernames;
     for (const auto &username : message->usernames())
     {
-        usernames.push_back(username);
+        usernames << QString::fromStdString(username);
     }
     emit searchResponseReceived(usernames);
 }
@@ -190,15 +190,15 @@ void ChatClient::onGroupResponse(const TcpConnectionPtr &conn,
     {
         ChatLogInfo() << "Group operation failed: " << QString::fromStdString(message->error_message());
     }
-      std::vector<std::string> groups;
+     QStringList groups;
     if (message->joined_groups_size() > 0)
     {
         for (const auto &group : message->joined_groups())
         {
-                groups.push_back(group);
+                groups << QString::fromStdString(group);
         }
     }
-        emit groupResponseReceived(message->success(), operation, message->error_message(), groups);
+        emit groupResponseReceived(message->success(), QString::fromStdString(operation), QString::fromStdString(message->error_message()), groups);
 }
 
 void ChatClient::onTextMessage(const TcpConnectionPtr &conn,
@@ -215,7 +215,7 @@ void ChatClient::onTextMessage(const TcpConnectionPtr &conn,
     {
         group = message->target();
     }
-    emit textMessageReceived(is_group, group, message->sender(), ac_.filter(message->content()));
+    emit textMessageReceived(is_group, QString::fromStdString(group), QString::fromStdString(message->sender()), QString::fromStdString(ac_.filter(message->content())));
 }
 
 void ChatClient::onUnknownMessageType(const TcpConnectionPtr &conn,

@@ -21,13 +21,13 @@ public:
         return selected_friend_name_;
     }
 public slots:
-    void onSearchResponseReceived(const std::vector<std::string> &usernames);
+    void onSearchResponseReceived(const QStringList &usernames);
 private slots:
     void on_pushButton_find_clicked();
 
     void on_pushButton_addFriend_clicked();
 signals:
-    void sendSearchMessageRequest(const std::string &pattern);
+    void sendSearchMessageRequest(const QString &pattern);
 private:
     Ui::AddFriendDialog *ui;
     std::string selected_friend_name_;
