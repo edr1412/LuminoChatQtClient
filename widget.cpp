@@ -4,6 +4,8 @@
 #include <QGuiApplication>
 #include <QDesktopWidget>
 #include <QScreen>
+#include <QMessageBox>
+
 
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
@@ -52,14 +54,13 @@ void Widget::InitUI()
 void Widget::Init()
 {
     connect(&client_, &ChatClient::loginResponseReceived, this, &Widget::onLoginResponseReceived);
-    connect(&client_, &ChatClient::logoutResponseReceived, this, &Widget::onLogoutResponseReceived);
     connect(&client_, &ChatClient::registerResponseReceived, this, &Widget::onRegisterResponseReceived);
     connect(&client_, &ChatClient::textMessageReceived, this, &Widget::onTextMessageReceived);
-    connect(&client_, &ChatClient::textMessageResponseReceived, this, &Widget::onTextMessageResponseReceived);
-    connect(&client_, &ChatClient::searchResponseReceived, this, &Widget::onSearchResponseReceived);
     connect(&client_, &ChatClient::groupResponseReceived, this, &Widget::onGroupResponseReceived);
     
     LoginDlg* loginDlg = new LoginDlg;
+    connect(loginDlg, &LoginDlg::sendLoginMessageRequest, this, &Widget::onSendLoginMessageRequest);
+    connect(loginDlg, &LoginDlg::sendRegistMessageRequest, this, &Widget::onSendRegistMessageRequest);
     loginDlg->setAttribute(Qt::WA_DeleteOnClose);
     loginDlg->show();
     int status = loginDlg->exec();
@@ -81,15 +82,18 @@ void Widget::onLoginResponseReceived(bool success, const std::string &username)
         this->hasLogin_ = true;
         this->username_ = username;
         this->setWindowTitle(QString("WeChat[%1]").arg(QString::fromStdString(username)));
-        sendGroupListRequest();
+        std::string command = "group query";
+        ChatLogInfo()<<"command: "<<command;
+        client_.send(command);
         this->show();
-
     }
     else
     {
         this->hasLogin_ = false;
         // 重新尝试登录
         LoginDlg* loginDlg = new LoginDlg;
+        connect(loginDlg, &LoginDlg::sendLoginMessageRequest, this, &Widget::onSendLoginMessageRequest);
+        connect(loginDlg, &LoginDlg::sendRegistMessageRequestAsProxy, this, &Widget::onSendRegistMessageRequest);
         loginDlg->setAttribute(Qt::WA_DeleteOnClose);
         loginDlg->show();
         int status = loginDlg->exec();
@@ -105,11 +109,23 @@ void Widget::onLoginResponseReceived(bool success, const std::string &username)
     }
 }
 
+void Widget::onRegistResponseReceived(bool success)
+{
+    if (success)
+    {
+        QMessageBox::information(this, "注册成功", "注册成功，请登录");
+    }
+    else
+    {
+        QMessageBox::information(this, "注册失败", "注册失败，请重试");
+    }
+}
+
 static int stackWidgetIndex = 0;
 
-void Widget::Init_Group_Info(GroupChatInfo* groupInfo)
+void Widget::Add_Group_Item(const std::string& group)
 {
-    ui->listWidget_info->addItem(QString("[群][%1]").arg(groupInfo->m_groupName));
+    ui->listWidget_info->addItem(QString("[群][%1]").arg(group));
 
     ui->stackedWidget_Msg->setCurrentIndex(stackWidgetIndex++);
     if(stackWidgetIndex >=ui->stackedWidget_Msg->count())
@@ -130,9 +146,9 @@ void Widget::Init_Group_Info(GroupChatInfo* groupInfo)
     mainLayout->setMargin(0); //设置外边距
     mainLayout->setSpacing(0);//设置内边距
 
-    m_chatWigetMap.insert(std::make_pair(groupInfo->m_account,listWidget));
+    m_chatWigetMapGroup.insert(std::make_pair(group,listWidget));
     chatWidgetInfo* chatInfo = new chatWidgetInfo;
-    chatInfo->m_account = groupInfo->m_account;
+    chatInfo->m_account = group;
     chatInfo->m_type = TYPE_GROUP_CHAT;
 
     m_chatWidgetInfoList.push_back(chatInfo);
@@ -140,9 +156,13 @@ void Widget::Init_Group_Info(GroupChatInfo* groupInfo)
     ui->listWidget_info->setCurrentRow(stackWidgetIndex - 1);
 }
 
-void Widget::Init_Friend_Info(FriendInfo *friendInfo)
+void Widget::Add_Friend_Item(const std::string& username)
 {
-    ui->listWidget_info->addItem(QString("[好友][%1]").arg(friendInfo->m_userName));
+    ui->listWidget_info->addItem(QString("[好友][%1]").arg(username));
+
+    // 记录当前 stackedWidget_Msg 的index 和 listWidget_info的row
+    int index = ui->stackedWidget_Msg->currentIndex();
+    int row = ui->listWidget_info->currentRow();
 
     ui->stackedWidget_Msg->setCurrentIndex(stackWidgetIndex++);
     if(stackWidgetIndex >=ui->stackedWidget_Msg->count())
@@ -164,292 +184,73 @@ void Widget::Init_Friend_Info(FriendInfo *friendInfo)
     mainLayout->setMargin(0); //设置外边距
     mainLayout->setSpacing(0);//设置内边距
 
-    m_chatWigetMap.insert(std::make_pair(friendInfo->m_account,listWidget));
+    m_chatWigetMapPrivate.insert(std::make_pair(username,listWidget));
     chatWidgetInfo* chatInfo = new chatWidgetInfo;
-    chatInfo->m_account = friendInfo->m_account;
+    chatInfo->m_account = username;
     chatInfo->m_type = TYPE_PRIVATE_CHAT;
 
     m_chatWidgetInfoList.push_back(chatInfo);
-    ui->listWidget_info->setCurrentRow(stackWidgetIndex - 1);
+    //ui->listWidget_info->setCurrentRow(stackWidgetIndex - 1);
+    ui->stackedWidget_Msg->setCurrentIndex(index);
+    ui->listWidget_info->setCurrentRow(row);
 }
 
-void Widget::writeMsg(void *buf, int bufLen, int type, int error,int mode)
+void Widget::onTextMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content)
 {
-    DeMessageHead header;
-    memcpy(header.mark, "DE", sizeof(header.mark));
-    header.encoded = '0';
-    header.version = '0';
-    header.length = sizeof(DeMessagePacket) + bufLen;
-
-    char *p = (char *)malloc(header.length);
-    DeMessagePacket *pPacket = (DeMessagePacket *)p;
-    pPacket->mode = mode;
-    pPacket->sequence = getSeqNum();
-    pPacket->command = type;
-    pPacket->error = error;
-    if(buf)
-        memcpy(p + sizeof(DeMessagePacket), buf, bufLen);
-
-    char *sendMsg = new char[sizeof(DeMessageHead) + header.length];
-    memset(sendMsg, 0, sizeof(DeMessageHead) + header.length);
-    memcpy(sendMsg, &header, sizeof(DeMessageHead));
-    memcpy(sendMsg + sizeof(DeMessageHead), p, header.length);
-    if(p!=NULL){
-        free(p);
-        p = NULL;
-    }
-    if (socket->isWritable()) {
-        socket->write(sendMsg, sizeof(DeMessageHead) + header.length);
-    }
-    else {
-        ChatLogInfo()<<"socket is unWritable";
-    }
-    if(sendMsg!=NULL){
-        delete[] sendMsg;
-        sendMsg = NULL;
-    }
-}
-
-/**
- * @brief 发送请求
- */
-void Widget::getGroupList()
-{
-    /*获取群聊列表*/
-    writeMsg(NULL,0,CommandEnum_GetGroupList);
-    /*获取群成员信息*/
-    GetGroupInfoReq getGroupInfoReq;
-    getGroupInfoReq.m_Group = 0;
-    writeMsg(&getGroupInfoReq,sizeof(GetGroupInfoReq),CommandEnum_GetGroupInfo);
-}
-
-void Widget::getFriendList()
-{
-    writeMsg(NULL,0,CommandEnum_GetFriendInfo);
-}
-
-
-int Widget::handleRegiste(void *msg)
-{
-    RegistInfoReq* registInfo = (RegistInfoReq*)msg;
-    printf("username:%s,password:%s\n",registInfo->m_userName,registInfo->m_password);
-    return 0;
-}
-
-int Widget::handleLogin(void *msg)
-{
-    GroupUserInfo* loginInfo = (GroupUserInfo*)msg;
-    ChatLogInfo()<<"account:"<<loginInfo->m_account<<",userName:"<<loginInfo->m_userName;
-
-    GroupUserInfo* newGroupUserInfo = (GroupUserInfo*)malloc(sizeof(GroupUserInfo));
-    memmove(newGroupUserInfo,msg,sizeof(GroupUserInfo));
-
-    int ret = ChatInfoManage::getInstance()->addGroupUserInfo(0,newGroupUserInfo);
-    if(ret == 0){
-        ChatLogInfo()<<"新用户上线了，保存用户信息..";
-    }
-    else {
-        ChatLogInfo()<<"Insert new userInfo fail";
-    }
-    return 0;
-}
-
-int Widget::handleLogout(void *msg)
-{
-    Q_UNUSED(msg)
-    return 0;
-}
-
-int Widget::handleGroupChat(void *msg)
-{
-    GroupChatReq* groupChatReq = (GroupChatReq*)msg;
-    ChatLogInfo()<<"群聊账号:"<<groupChatReq->m_GroupAccount<<"msg size:"<<groupChatReq->m_msgLen;
-    //获取聊天群信息
-    GroupChatInfo* groupChatInfo =ChatInfoManage::getInstance()->getGroupChatInfo(groupChatReq->m_GroupAccount);
-    if(groupChatInfo == NULL)
+    if(is_group)
     {
-        ChatLogInfo()<<"not find chatgroup indo";
+        mapChatWidget::iterator iter = m_chatWigetMapGroup.find(group);
+        if(iter==m_chatWigetMapGroup.end()){
+            Add_Group_Item(group);
+            iter = m_chatWigetMapGroup.find(group);
+            if(iter==m_chatWigetMapGroup.end()){
+                QMessageBox::information(this, "错误", "添加群聊失败");
+            }
+        }
+        QListWidget* chatWidget = iter->second;
+        QListWidgetItem* item = new QListWidgetItem;
+        //这里转码，中文名称显示乱码
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
+        item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        chatWidget->addItem(item);
     }
-    if(groupChatReq->m_msgLen <= 0){
-        ChatLogInfo()<<"msgLen:"<<groupChatReq->m_msgLen;
-        return 0;
-    }
-    //从群用户信息总表中获取用户信息
-    char*buf = (char*)malloc(groupChatReq->m_msgLen + 1);
-    memmove(buf,(char*)msg + sizeof(GroupChatReq),groupChatReq->m_msgLen);
-    buf[groupChatReq->m_msgLen] = '\0';
-
-    GroupUserInfo* userInfo = ChatInfoManage::getInstance()->getGroupUserInfo(groupChatReq->m_GroupAccount,groupChatReq->m_UserAccount);
-    if(groupChatInfo!=NULL&& userInfo!=NULL)
+    else
     {
-        mapChatWidget::iterator iter = m_chatWigetMap.find(groupChatReq->m_GroupAccount);
-        if(iter!=m_chatWigetMap.end()){
-            QListWidget* chatWidget = iter->second;
-            QListWidgetItem* item = new QListWidgetItem;
-            //这里转码，中文名称显示乱码
-            item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1][%2]:%3").arg(userInfo->m_account)
-                          .arg(QString(userInfo->m_userName)).arg(buf));
-            item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-            chatWidget->addItem(item);
-            ChatLogInfo()<<"["<<groupChatInfo->m_groupName<<"]"<<"["<<userInfo->m_userName<<"]"<<buf;
+        mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(sender);
+        if(iter==m_chatWigetMapPrivate.end()){
+            Add_Friend_Item(sender);
+            iter = m_chatWigetMapPrivate.find(sender);
+            if(iter==m_chatWigetMapPrivate.end()){
+                QMessageBox::information(this, "错误", "添加私聊失败");
+            }
+        }
+        QListWidget* chatWidget = iter->second;
+        QListWidgetItem* item = new QListWidgetItem;
+        //这里转码，中文名称显示乱码
+        item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1]%2").arg(sender).arg(content));
+        item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        chatWidget->addItem(item);
+    }
+}
+
+void Widget::onGroupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups)
+{
+    if(!success)
+    {
+        QMessageBox::information(this, operation + "错误", QString::fromStdString(error_message));
+    }
+    // 遍历groups，检查m_chatWigetMapGroup中是否存在，不存在则执行Add_Group_Item
+    for(auto group : groups)
+    {
+        mapChatWidget::iterator iter = m_chatWigetMapGroup.find(group);
+        if(iter==m_chatWigetMapGroup.end()){
+            Add_Group_Item(group);
+            iter = m_chatWigetMapGroup.find(group);
+            if(iter==m_chatWigetMapGroup.end()){
+                QMessageBox::information(this, "错误", "添加群聊失败");
+            }
         }
     }
-    return 0;
-}
-
-int Widget::handlePrivateChat(void *msg)
-{
-    int ret = 0;
-    ChatLogInfo()<<"recv a privateChat Msg..";
-    PrivateChatReq* privateChatReq = (PrivateChatReq*)msg;
-    //获取聊天群信息
-    FriendInfo* friendInfo = ChatInfoManage::getInstance()->getFriendInfo(privateChatReq->m_UserAccount);
-    if(friendInfo==NULL){
-        printf("not find friend\n");
-    }
-
-    if(privateChatReq->m_msgLen <= 0){
-        ChatLogInfo()<<"msgLen:"<<privateChatReq->m_msgLen;
-        return 0;
-    }
-
-    char*buf = (char*)malloc(privateChatReq->m_msgLen + 1);
-    memset(buf,'\0',privateChatReq->m_msgLen + 1);
-    memmove(buf,(char*)msg + sizeof(PrivateChatReq),privateChatReq->m_msgLen);
-
-    //从群用户信息总表中获取用户信息
-    GroupUserInfo* userInfo = ChatInfoManage::getInstance()->getUserInfo(privateChatReq->m_UserAccount);
-    if(userInfo!=NULL){
-
-        mapChatWidget::iterator iter = m_chatWigetMap.find(userInfo->m_account);
-        if(iter!=m_chatWigetMap.end()){
-            QListWidget* chatWidget = iter->second;
-            QListWidgetItem* item = new QListWidgetItem;
-            //这里转码，中文名称显示乱码
-            item->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + QString("[%1][%2]:%3").arg(friendInfo->m_account)
-                          .arg(QString(friendInfo->m_userName)).arg(buf));
-            item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-            chatWidget->addItem(item);
-            ChatLogInfo()<<"["<<friendInfo->m_userName<<"]"<<buf;
-        }
-    }
-    else{
-        printf("chatgroup not find..\n");
-    }
-    return ret;
-}
-
-int Widget::getGroupList(void *msg)
-{
-    int ret = -1;
-    GetGroupListResp* pResp = (GetGroupListResp*)msg;
-    ChatLogInfo()<<"getGroupList:"<<pResp->m_size;
-    for(int i=0,index = 0; i<pResp->m_size; i++,index++){
-        GroupChatInfo* curGroupChatInfo =(GroupChatInfo *)((char*)msg + sizeof(GetGroupListResp) + sizeof(GroupChatInfo) * index);
-        //添加群信息到群管理
-        GroupChatInfo* groupChatInfo = (GroupChatInfo*)malloc(sizeof(GroupChatInfo));
-        groupChatInfo->m_account = curGroupChatInfo->m_account;
-        groupChatInfo->m_size = curGroupChatInfo->m_size;
-        strncpy(groupChatInfo->m_groupName,curGroupChatInfo->m_groupName,sizeof(curGroupChatInfo->m_groupName));
-        Init_Group_Info(groupChatInfo);
-        ChatLogInfo()<<"group:"<<groupChatInfo->m_account<<"name:"<<groupChatInfo->m_groupName<<",size:"<<groupChatInfo->m_size;
-        ret = ChatInfoManage::getInstance()->addGroupChatInfo(groupChatInfo);
-        if(ret == 0){
-            ChatLogInfo()<<"addGroupChatInfo success...";
-        }
-    }
-    return 0;
-}
-
-int Widget::getGroupInfo(void *msg)
-{
-    int ret = -1;
-    GetGroupInfoResp* pResp = (GetGroupInfoResp*)msg;
-    mapGroupUserInfo groupUserInfoMap;
-    //添加群成员信息到群成员管理
-    ChatLogInfo()<<"group:"<<pResp->m_GroupAccount<<",size:"<<pResp->m_size;
-    for(int i=0;i<pResp->m_size;i++){
-        GroupUserInfo* pUserInfo = (GroupUserInfo*)((char*)msg + sizeof(GetGroupInfoResp) + sizeof(GroupUserInfo)*i);
-        GroupUserInfo* pNewUserInfo = (GroupUserInfo*)malloc(sizeof(GroupUserInfo));
-        memmove(pNewUserInfo,pUserInfo,(sizeof(GroupUserInfo)));
-
-        if(pNewUserInfo->m_account == m_userInfo.m_account){
-            strncpy(m_userInfo.m_userName,pNewUserInfo->m_userName,sizeof(pNewUserInfo->m_userName));
-        }
-
-        ret = ChatInfoManage::getInstance()->addGroupUserInfo(pResp->m_GroupAccount,pNewUserInfo);
-        if(ret == 0){
-            ChatLogInfo()<<"account:"<<pUserInfo->m_account<<",name:"<<pUserInfo->m_userName<<"right:"<<pUserInfo->m_right<<",size:"<<groupUserInfoMap.size();
-        }
-    }
-    return 0;
-}
-
-int Widget::getFriendInfo(void *msg)
-{
-    GetFriendInfoResp* pResp = (GetFriendInfoResp*)msg;
-    ChatLogInfo()<<"friend size:"<<pResp->m_size;
-    for(int i=0;i<pResp->m_size;i++){
-        FriendInfo* pFriendInfo = (FriendInfo*)((char*)msg + sizeof(GetFriendInfoResp) + sizeof(FriendInfo)*i);
-        FriendInfo* pNewFriendInfo = (FriendInfo*)malloc(sizeof(FriendInfo));
-        memmove(pNewFriendInfo,pFriendInfo,(sizeof(FriendInfo)));
-        //好友 map 表中插入好友数据
-        ChatInfoManage::getInstance()->addFriendInfo(pNewFriendInfo);
-        ChatLogInfo()<<"Friend account:"<<pNewFriendInfo->m_account<<",name:"<<pNewFriendInfo->m_userName;
-        Init_Friend_Info(pNewFriendInfo);
-    }
-    return 0;
-}
-
-//其他客户端给你发送添加好友请求
-int Widget::handleAddFriendReq(void *msg)
-{
-    AddFriendInfoReq* pAddFriendInfoReq = (AddFriendInfoReq*)msg;
-    LOGINFO("get a add friend request..\n");
-
-    GroupUserInfo *pUserInfo = ChatInfoManage::getInstance()->getUserInfo(pAddFriendInfoReq->m_senderAccount);
-    if(pUserInfo!=NULL){
-        ChatLogInfo()<<"account:"<< pAddFriendInfoReq->m_senderAccount <<",m_reqInfo:"<< pAddFriendInfoReq->m_reqInfo;
-        //将等待添加的好友添加到 map 表中
-        FriendInfo *pFriendInfo = (FriendInfo *)malloc(sizeof(FriendInfo));
-        pFriendInfo->m_account = pUserInfo->m_account;
-        pFriendInfo->m_status = 1;  //Linux命令行客户端直接同意
-        strncpy(pFriendInfo->m_userName, pUserInfo->m_userName, sizeof(pUserInfo->m_userName));
-        ChatInfoManage::getInstance()->addFriendInfo(pFriendInfo);
-        Init_Friend_Info(pFriendInfo);
-
-        //给等待添加的好友发送添加好友的响应
-        AddFriendInfoResp resp;
-        resp.m_friendAccount = pAddFriendInfoReq->m_friendAccount;
-        resp.m_senderAccount = pAddFriendInfoReq->m_senderAccount;
-        resp.status = 0;   //同意
-        writeMsg(&resp, sizeof(AddFriendInfoResp), CommandEnum_AddFriend,0,2);
-    }
-    else if(pUserInfo == NULL){
-        ChatLogInfo()<<"该用户不存在";
-    }
-}
-
-int Widget::handleAddFriendResp(void *msg)
-{
-    //处理好友请求后对方给的响应
-    AddFriendInfoResp* pResp = (AddFriendInfoResp*)msg;
-    GroupUserInfo* userInfo = ChatInfoManage::getInstance()->getUserInfo(pResp->m_friendAccount);
-    if(pResp->status == 0){
-        //对方同意添加好友
-        FriendInfo*friendInfo = (FriendInfo*)malloc(sizeof(FriendInfo));
-        friendInfo->m_account = pResp->m_friendAccount;
-        strncpy(friendInfo->m_userName,userInfo->m_userName,sizeof(userInfo->m_userName));
-        friendInfo->m_status = 1;   //1同意
-        ChatInfoManage::getInstance()->addFriendInfo(friendInfo);
-        Init_Friend_Info(friendInfo);
-        ChatLogInfo()<<"account:"<<friendInfo->m_account<<",name:"<<friendInfo->m_userName;
-    }
-    else {
-        ChatLogInfo()<<"对方拒绝了..";
-        return -1;
-    }
-    return 0;
 }
 
 void Widget::on_pushBtn_send_clicked()
@@ -459,6 +260,7 @@ void Widget::on_pushBtn_send_clicked()
         ChatLogInfo()<<"Msg is null";
         return;
     }
+    std::string msg_to_send = ui->textEdit->toPlainText().toStdString();
     int currentRow = ui->listWidget_info->currentRow();
     if(currentRow < 0){
         ChatLogInfo()<<"未选择聊天窗口";
@@ -483,155 +285,75 @@ void Widget::on_pushBtn_send_clicked()
         ChatLogInfo()<<"---------notfind----------";
         return ;
     }
-    mapChatWidget::iterator iter = m_chatWigetMap.find(chatInfo->m_account);
-    if(iter!=m_chatWigetMap.end()){
-        chatWidget = iter->second;
-    }
-    else {
-        ChatLogInfo()<<"not find..";
-        return;
-    }
-
-    QString str = ui->textEdit->toPlainText();
-    if(str.toStdString().size() > MAX_SEND_LENGTH){
-        ChatLogInfo()<<"超出最大发送大小..";
-        return;
-    }
     ui->textEdit->clear();
-    QString msg;
-    msg.sprintf("[%d][%s]%s",m_userInfo.m_account,m_userInfo.m_userName,str.toStdString().c_str());
-    chatWidget->addItem(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + msg);
-
-    ChatLogInfo()<<"["<<m_userInfo.m_userName<<"]["<<m_userInfo.m_account<<"]"<<str<<",size:"<<str.toStdString().size();
-    //发送消息
     if(chatInfo->m_type == TYPE_GROUP_CHAT){
-        //群聊
-        GroupChatReq *groupChatReq;
-        char *p = (char *)malloc(sizeof(GroupChatReq) + str.toStdString().size());
-        groupChatReq = (GroupChatReq *)p;
-        groupChatReq->m_UserAccount = m_userInfo.m_account;
-        groupChatReq->m_type = 0;
-        groupChatReq->m_GroupAccount = 0;
-        groupChatReq->m_msgLen = str.toStdString().size();
-        memmove(p + sizeof(GroupChatReq), str.toStdString().c_str(), str.toStdString().size());
-
-        writeMsg(p, sizeof(GroupChatReq) + str.toStdString().size(), CommandEnum_GroupChat);
-        if(p != NULL){
-            free(p);
-            p = NULL;
-        }
+        ChatLogInfo()<<"群聊";
+        std::string command = "send group " + std::to_string(chatInfo->m_account) + " " + msg_to_send;
+        ChatLogInfo()<<"command:"<<command;
+        client_.send(command);
     }
-    else if(chatInfo->m_type == TYPE_PRIVATE_CHAT){
-
-        //私聊
-        PrivateChatReq *privateChatReq;
-        char *p = (char *)malloc(sizeof(PrivateChatReq) + str.toStdString().size());
-        privateChatReq = (PrivateChatReq *)p;
-
-        privateChatReq->m_UserAccount = m_userInfo.m_account;
-        privateChatReq->m_type = 0;
-        privateChatReq->m_FriendAccount = chatInfo->m_account;
-        privateChatReq->m_msgLen = str.toStdString().size();
-        memmove(p + sizeof(PrivateChatReq), str.toStdString().c_str(), str.toStdString().size());
-        writeMsg(p, sizeof(PrivateChatReq) + str.toStdString().size(), CommandEnum_PrivateChat);
-        if(p != NULL){
-            free(p);
-            p = NULL;
+    else{
+        ChatLogInfo()<<"私聊";
+        std::string command = "send " + std::to_string(chatInfo->m_account) + " " + msg_to_send;
+        ChatLogInfo()<<"command:"<<command;
+        client_.send(command);
+        mapChatWidget::iterator iter = m_chatWigetMapPrivate.find(chatInfo->m_account);
+        if(iter!=m_chatWigetMapPrivate.end()){
+            chatWidget = iter->second;
+            QString msg;
+            msg.sprintf("[%s]:%s", username_, msg_to_send.c_str());
+            chatWidget->addItem(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") + " " + msg);
         }
+        else {
+            ChatLogInfo()<<"not find..";
+        }
+
     }
 }
 
-int Widget::handleMsg(recvMsg *rMsg)
-{
-    DeMessagePacket *packet = (DeMessagePacket *)(rMsg->body);
-
-    DeMessageHead *head = (DeMessageHead *)(rMsg->head);
-//    ChatLogInfo()<<"mark:"<<head->mark<<",encoded:"<<head->encoded<<",length:"<<head->length<<",version:"<<head->version;
-//    ChatLogInfo()<<"command:"<<packet->command<<",error:"<<packet->error<<",mode:"<<packet->mode<<",sequence:"<<packet->sequence;
-
-//    void *reqData = NULL;
-//    int reqDataLen = -1;
-//    short ret = RET_OK;
-
-    ChatLogInfo()<<"handleMsg:"<<packet->command<<",str:"<<getChatCmdString(packet->command);
-    switch (packet->command)
-    {
-        case CommandEnum_Registe:
-            // handleRegiste(rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_Login:
-            if(packet->mode == 3){
-                handleLogin(rMsg->body + sizeof(DeMessagePacket));
-            }else if(packet->mode == 2 && packet->error == 0){
-                hasLogin_ = 1;
-                ChatLogInfo()<<"登陆成功..";
-            }
-            break;
-        case CommandEnum_Logout:
-            // handleLogout(this, rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_GroupChat:
-            handleGroupChat(rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_AddFriend:
-            if(packet->mode == 1){
-                //其他客户端给你发送添加好友请求
-                handleAddFriendReq(rMsg->body + sizeof(DeMessagePacket));
-            }else if(packet->mode == 2){
-                if(head->length - sizeof(DeMessagePacket) == 0)
-                {
-                    //这个是发送好友请求后服务器返回的状态
-                    if(packet->error == 0){
-                        ChatLogInfo()<<"addFriend Request success..";
-                    }
-                    else {
-                        ChatLogInfo()<<"addFriend Request fail,error:"<<packet->error;
-                    }
-                }
-                else
-                    handleAddFriendResp(rMsg->body + sizeof(DeMessagePacket));
-            }
-            break;
-        case CommandEnum_delFriend:
-            break;
-        case CommandEnum_PrivateChat:
-            handlePrivateChat(rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_CreateGroup:
-            break;
-        case CommandEnum_GetGroupList:
-            getGroupList(rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_GetGroupInfo:
-            getGroupInfo(rMsg->body + sizeof(DeMessagePacket));
-            break;
-        case CommandEnum_GetFriendInfo:
-            getFriendInfo(rMsg->body + sizeof(DeMessagePacket));
-            break;
-    }
-    return 0;
-}
 
 void Widget::on_pushButton_addFriend_clicked()
 {
     AddFriendDialog* addFriendDlg = new AddFriendDialog();
+    connect(&client_, &ChatClient::searchResponseReceived, addFriendDlg, &Widget::onSearchResponseReceived);
+    connect(addFriendDlg, &AddFriendDialog::sendSearchMessageRequest, this, &Widget::onSendSearchMessageRequest);
 
     addFriendDlg->show();
     if(addFriendDlg->exec() == QDialog::Accepted)
     {
-        AddFriendInfoReq addFriendInfoReq = addFriendDlg->getAddFriendInfoReq();
-        addFriendInfoReq.m_senderAccount = m_userInfo.m_account;
-        ChatLogInfo()<<"friend account:"<<addFriendInfoReq.m_friendAccount;
-        ChatLogInfo()<<"Req Info:"<<addFriendInfoReq.m_reqInfo;
-        writeMsg((char*)&addFriendInfoReq,sizeof(AddFriendInfoReq),CommandEnum_AddFriend);
+        std::string username = addFriendDlg->getFriendName();
+        Add_Friend_Item(username);
     }
+}
+
+void Widget::onSendSearchMessageRequest(const std::string &pattern)
+{
+    ChatLogInfo()<<"onSendSearchMessageRequest";
+    std::string command = "search " + pattern;
+    ChatLogInfo()<<"command:"<<command;
+    client_.send(command);
+}
+void Widget::onSendLoginMessageRequest(const std::string &username, const std::string &password)
+{
+    ChatLogInfo()<<"onSendLoginMessageRequest";
+    std::string command = "login " + username + " " + password;
+    ChatLogInfo()<<"command:"<<command;
+    client_.send(command);
+}
+
+void Widget::onSendRegistMessageRequest(const std::string &username, const std::string &password)
+{
+    ChatLogInfo()<<"onSendRegistMessageRequest";
+    std::string command = "register " + username + " " + password;
+    ChatLogInfo()<<"command:"<<command;
+    client_.send(command);
 }
 
 void Widget::on_listWidget_info_itemClicked(QListWidgetItem *item)
 {
     int currentRow = ui->listWidget_info->currentRow();
     ui->stackedWidget_Msg->setCurrentIndex(currentRow);
-    ChatLogInfo()<<item->text()<<"current Row chicked.."<<currentRow;
+    ChatLogInfo()<<item->text()<<"current Row clicked.."<<currentRow;
 
 }
 

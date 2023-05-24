@@ -37,7 +37,7 @@ class ChatClient : public QObject
 {
     Q_OBJECT
 public:
-    ChatClient(EventLoop *loop, const InetAddress &serverAddr, QObject *parent = nullptr);
+    explicit ChatClient(EventLoop *loop, const InetAddress &serverAddr, QObject *parent = nullptr);
     void connect();
     void disconnect();
     void send(const std::string &line);
@@ -49,7 +49,7 @@ signals:
     void textMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content);
     void textMessageResponseReceived(bool success);
     void searchResponseReceived(const std::vector<std::string> &usernames);
-    void groupResponseReceived(bool success, const std::string& operation, const std::vector<std::string> &groups);
+    void groupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups);
 
 private:
     void processCommand(const std::string &line);

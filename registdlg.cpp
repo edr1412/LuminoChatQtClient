@@ -2,6 +2,7 @@
 #include "ui_registdlg.h"
 
 #include <QGraphicsDropShadowEffect>
+#include <QMessageBox>
 
 RegistDlg::RegistDlg(QWidget *parent) :
     QDialog(parent),
@@ -33,43 +34,10 @@ void RegistDlg::mouseMoveEvent(QMouseEvent *event)
     }
 }
 
-void RegistDlg::disconnectedSlot()
-{
-    ChatLogInfo()<<"close socket...";
-}
-
-void RegistDlg::readyReadSlot()
-{
-    DeMessageHead header;
-    /*接收注册响应*/
-    memset(&header,'\0',sizeof(DeMessageHead));
-    int len = socket->read((char*)&header,sizeof(DeMessageHead));
-    ChatLogInfo()<<"readLen:"<<len;
-    ChatLogInfo()<<"length:"<<header.length;
-    char *p = (char*)malloc(header.length);
-    DeMessagePacket* pPacket = (DeMessagePacket *)p;
-    socket->read((char*)pPacket,header.length);
-
-    if(pPacket->error == 0){
-        m_status = true;
-    }
-
-    RegistInfoResp* resp = (RegistInfoResp*)(p+sizeof(DeMessagePacket));
-    ChatLogInfo()<<"account:"<<resp->m_account;
-
-    userInfo.m_account = resp->m_account;
-    strncpy(userInfo.m_userName,ui->lineEdit_username->text().toStdString().c_str(),ui->lineEdit_username->text().toStdString().size());
-    strncpy(userInfo.m_password,ui->lineEdit_password->text().toStdString().c_str(),ui->lineEdit_password->text().size());
-
-    free(p);
-    return accept();    //Closes the dialog and emits the accepted() signal.
-}
 
 void RegistDlg::Init()
 {
     this->setWindowTitle("WeChat 注册");
-    memset(&userInfo,'\0',sizeof (userInfo));
-    m_status = false;
     setWindowFlags(windowFlags() | Qt::WindowMinimizeButtonHint); // 最小化按钮
     setWindowFlags(windowFlags() | Qt::WindowContextHelpButtonHint); // 帮助按钮
 
@@ -94,56 +62,18 @@ void RegistDlg::Init()
 
 void RegistDlg::on_pushBtn_regist_clicked()
 {
-    socket = new QTcpSocket;
-    QString ipAddressStr = SERVER_ADDR;
-    quint16 port = SERVER_PORT;
-
-    socket->connectToHost(ipAddressStr, port);
-    if(socket->waitForConnected(3000))
+    std::string username = ui->lineEdit_username->text().toStdString();
+    std::string password = ui->lineEdit_password->text().toStdString();
+    //strncpy(m_userInfo.m_password,ui->lineEdit_password->text().toStdString().c_str(),ui->lineEdit_password->text().size());
+    if(username.empty() || password.empty())
     {
-        ChatLogInfo() << "Connect Server success";
-    }
-    else
-    {
-        ChatLogInfo() << socket->errorString();
+        QMessageBox::warning(this,"警告","账号或密码不能为空！");
         return;
     }
-
-    connect(socket, SIGNAL(disconnected()),this, SLOT(disconnectedSlot()));     //客户端断开连接
-    connect(socket, SIGNAL(readyRead()),this, SLOT(readyReadSlot()));           //接收消息
-
-    RegistInfoReq info;
-    memset(&info,'\0',sizeof(RegistInfoReq));
-    strncpy(info.m_userName,ui->lineEdit_username->text().toStdString().c_str(),ui->lineEdit_username->text().toStdString().size());
-    strncpy(info.m_password,ui->lineEdit_password->text().toStdString().c_str(),ui->lineEdit_password->text().size());
-    writeMsg(&info,sizeof(RegistInfoReq),CommandEnum_Registe);
+    emit sendRegistMessageRequest(username,password);
+    return accept();    //Closes the dialog and emits the accepted() signal.
 }
 
-void RegistDlg::writeMsg(void *buf, int bufLen, int type)
-{
-    DeMessageHead header;
-    memcpy(header.mark, "DE", sizeof(header.mark));
-    header.encoded = '0';
-    header.version = '0';
-    header.length = sizeof(DeMessagePacket) + bufLen;
-
-    char *p = (char *)malloc(header.length);
-    DeMessagePacket *pPacket = (DeMessagePacket *)p;
-    pPacket->mode = 2;
-    pPacket->sequence = getSeqNum();
-    pPacket->command = type;
-    pPacket->error = 0;
-    if(buf)
-        memcpy(p + sizeof(DeMessagePacket), buf, bufLen);
-
-    char *sendMsg = new char[sizeof(DeMessageHead) + header.length];
-    memset(sendMsg, 0, sizeof(DeMessageHead) + header.length);
-    memcpy(sendMsg, &header, sizeof(DeMessageHead));
-    memcpy(sendMsg + sizeof(DeMessageHead), p, header.length);
-    free(p);
-    socket->write(sendMsg, sizeof(DeMessageHead) + header.length);
-    delete[] sendMsg;
-}
 
 void RegistDlg::on_pushBtn_hide_clicked()
 {

@@ -16,10 +16,7 @@ class LoginDlg : public QDialog
 public:
     explicit LoginDlg(QWidget *parent = nullptr);
     ~LoginDlg();
-public:
-    UserInfo* getUserInfo(){
-        return &m_userInfo;
-    }
+
 private:
     void Init();
 protected:
@@ -30,6 +27,12 @@ public:
     QPoint mouseWindowTopLeft; //鼠标相对窗口左上角的坐标         在mousePressEvent 得到
     QPoint mouseDeskTopLeft;   //鼠标相对于桌面左上角坐标         在mouseMoveEvent实时获取
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
+
+signals:
+    void sendLoginMessageRequest(const std::string &username, const std::string &password);
+    void sendRegistMessageRequestAsProxy(const std::string &username, const std::string &password);
+public slots:
+    void onSendRegistMessageRequestAsProxy(const std::string &username, const std::string &password);
 private slots:
     void on_pushbtn_regist_clicked();
 
@@ -41,7 +44,6 @@ private slots:
 
 private:
     Ui::LoginDlg *ui;
-    UserInfo m_userInfo;
 };
 
 #endif // LOGINDLG_H

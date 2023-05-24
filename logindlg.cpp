@@ -4,6 +4,7 @@
 #include <QBitmap>
 #include <QGraphicsDropShadowEffect>
 #include <QPainter>
+#include <QMessageBox>
 
 LoginDlg::LoginDlg(QWidget *parent) :
     QDialog(parent),
@@ -62,8 +63,6 @@ void LoginDlg::Init()
     ui->centerWidget->setGraphicsEffect(shadow);
 #endif
 
-
-    memset(&m_userInfo,'\0',sizeof(m_userInfo));
 }
 
 void LoginDlg::mousePressEvent(QMouseEvent *event)
@@ -86,17 +85,25 @@ void LoginDlg::mouseMoveEvent(QMouseEvent *event)
 
 void LoginDlg::on_pushbtn_regist_clicked()
 {
-    RegistDlg registDlg;
-    registDlg.show();
-    if(registDlg.exec() == QDialog::Accepted)
+    RegistDlg* registDlg = new RegistDlg(this);
+    connect(registDlg, &RegistDlg::sendRegistMessageRequest, this, &LoginDlg::onSendRegistMessageRequestAsProxy);
+    registDlg->setAttribute(Qt::WA_DeleteOnClose);
+    registDlg->show();
+    int status = registDlg->exec();
+    if (status == QDialog::Accepted)
     {
-        if(registDlg.getStatus()){
-            UserInfo info = registDlg.getUserInfo();
-            ui->lineEdit_account->setText(QString::number(info.m_account));
-            strncpy(m_userInfo.m_userName,info.m_userName,sizeof(info.m_userName));
-            ChatLogInfo()<<"注册成功，账号:"<<info.m_account;
-        }
+        ChatLogInfo()<<"wait for server..";
     }
+    else if (status == QDialog::Rejected)
+    {
+        ChatLogInfo()<<"close..";
+    }
+}
+
+void LoginDlg::onSendRegistMessageRequestAsProxy(const std::string &username, const std::string &password)
+{
+    ChatLogInfo()<<"onSendRegistMessageRequestAsProxy";
+    emit sendRegistMessageRequestAsProxy(username, password);
 }
 
 void LoginDlg::on_pushButton_login_clicked()
@@ -104,14 +111,12 @@ void LoginDlg::on_pushButton_login_clicked()
     std::string username = ui->lineEdit_account->text().toStdString();
     std::string password = ui->lineEdit_password->text().toStdString();
     //strncpy(m_userInfo.m_password,ui->lineEdit_password->text().toStdString().c_str(),ui->lineEdit_password->text().size());
-    std::string command = "login " + username + " " + password;
-    ChatLogInfo()<<"command: "<<command;
     if(username.empty() || password.empty())
     {
         QMessageBox::warning(this,"警告","账号或密码不能为空！");
         return;
     }
-    client_.send(command);
+    emit sendLoginMessageRequest(username, password);
     return accept();    //Closes the dialog and emits the accepted() signal.
 }
 

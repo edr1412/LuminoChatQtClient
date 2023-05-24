@@ -1,4 +1,7 @@
 #include "chatclient.h"
+#include "common.h"
+
+using namespace std::placeholders;
 
 ChatClient::ChatClient(EventLoop *loop, const InetAddress &serverAddr, QObject *parent)
     : loop_(loop),
@@ -26,7 +29,7 @@ ChatClient::ChatClient(EventLoop *loop, const InetAddress &serverAddr, QObject *
     client_.setMessageCallback(
         std::bind(&ProtobufCodec::onMessage, &codec_, _1, _2, _3));
     client_.enableRetry();
-    std::vector<std::string> words = {"Steve Jobs", "Tim Cook", "Jony Ive", "Apple Inc.", "iPhone", "iPad", "MacBook", "iMac", "Apple Watch", "iOS", "macOS", "Safari", "Apple Music", "HomePod", "iCloud", "乔布斯", "蒂姆·库克", "强尼·艾维", "苹果公司", "苹果手机", "苹果平板", "麦金塔电脑"};
+    std::vector<std::string> words = WordsWeHate;
     for (std::string word : words) {
         ac_.insert(word);
     }
@@ -54,8 +57,8 @@ void ChatClient::send(const std::string &line)
 
 void ChatClient::onConnection(const TcpConnectionPtr &conn)
 {
-  ChatLogInfo() << conn->localAddress().toIpPort() << " -> "
-            << conn->peerAddress().toIpPort() << " is "
+  ChatLogInfo() << QString::fromStdString(conn->localAddress().toIpPort()) << " -> "
+            << QString::fromStdString(conn->peerAddress().toIpPort()) << " is "
             << (conn->connected() ? "UP" : "DOWN");
 
   MutexLockGuard lock(connection_mutex_);
@@ -69,141 +72,141 @@ void ChatClient::onConnection(const TcpConnectionPtr &conn)
   }
 }
 
-  void ChatClient::onTextMessageResponse(const TcpConnectionPtr &conn,
+void ChatClient::onTextMessageResponse(const TcpConnectionPtr &conn,
                             const TextMessageResponsePtr &message,
                             Timestamp)
-  {
-      ChatLogInfo() << "onTextMessageResponse: " << message->GetTypeName();
-
-      if (message->success())
-      {
-          ChatLogInfo() << "Message sent successfully";
-      }
-      else
-      {
-          ChatLogInfo() << "Failed to send message: " << message->error_message();
-      }
-  }
-
-  void ChatClient::onLoginResponse(const TcpConnectionPtr &conn,
-                       const LoginResponsePtr &message,
-                       Timestamp)
-  {
-    LOG_INFO << "onLoginResponse: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onTextMessageResponse: " << QString::fromStdString(message->GetTypeName());
 
     if (message->success())
     {
-      LOG_INFO << "Login succeeded";
-      {
-      MutexLockGuard lock(username_mutex_);
+        ChatLogInfo() << "Message sent successfully";
+    }
+    else
+    {
+        ChatLogInfo() << "Failed to send message: " << QString::fromStdString(message->error_message());
+    }
+}
+
+void ChatClient::onLoginResponse(const TcpConnectionPtr &conn,
+                       const LoginResponsePtr &message,
+                       Timestamp)
+{
+    ChatLogInfo() << "onLoginResponse: " << QString::fromStdString(message->GetTypeName());
+
+    if (message->success())
+    {
+        ChatLogInfo() << "Login succeeded";
+        {
+            MutexLockGuard lock(username_mutex_);
       username_ = message->username();
-      }
+        }
       emit loginResponseReceived(true, message->username());
     }
     else
     {
-      LOG_ERROR << "Login failed: " << message->error_message();
+        ChatLogInfo() << "Login failed: " << QString::fromStdString(message->error_message());
       emit loginResponseReceived(false, message->error_message());
     }
-  }
+}
 
-    void ChatClient::onLogoutResponse(const TcpConnectionPtr &conn,
+void ChatClient::onLogoutResponse(const TcpConnectionPtr &conn,
                         const LogoutResponsePtr &message,
                         Timestamp)
-  {
-    LOG_INFO << "onLogoutResponse: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onLogoutResponse: " << QString::fromStdString(message->GetTypeName());
 
     if (message->success())
     {
-      LOG_INFO << "Logout succeeded";
-      // MutexLockGuard lock(username_mutex_);
-      // username_ = "guest";
+        ChatLogInfo() << "Logout succeeded";
+        // MutexLockGuard lock(username_mutex_);
+        // username_ = "guest";
     }
     else
     {
-      LOG_ERROR << "Logout failed: " << message->error_message();
+        ChatLogInfo() << "Logout failed: " << QString::fromStdString(message->error_message());
     }
-  }
+}
 
-    void ChatClient::onRegisterResponse(const TcpConnectionPtr &conn,
+void ChatClient::onRegisterResponse(const TcpConnectionPtr &conn,
                           const RegisterResponsePtr &message,
                           Timestamp)
-  {
-    LOG_INFO << "onRegisterResponse: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onRegisterResponse: " << QString::fromStdString(message->GetTypeName());
 
     if (message->success())
     {
-      LOG_INFO << "Register succeeded";
-      emit registerResponseReceived(true);
+        ChatLogInfo() << "Register succeeded";
+        emit registerResponseReceived(true);
     }
     else
     {
-      LOG_ERROR << "Register failed: " << message->error_message();
-      emit registerResponseReceived(false);
+        ChatLogInfo() << "Register failed: " << QString::fromStdString(message->error_message());
+        emit registerResponseReceived(false);
     }
-  }
+}
 
-    void ChatClient::onSearchResponse(const TcpConnectionPtr &conn,
+void ChatClient::onSearchResponse(const TcpConnectionPtr &conn,
                         const SearchResponsePtr &message,
                         Timestamp)
-  {
-    LOG_INFO << "onSearchResponse: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onSearchResponse: " << QString::fromStdString(message->GetTypeName());
     std::vector<std::string> usernames;
     for (const auto &username : message->usernames())
     {
         usernames.push_back(username);
     }
     emit searchResponseReceived(usernames);
-  }
+}
 
 void ChatClient::onGroupResponse(const TcpConnectionPtr &conn,
                       const GroupResponsePtr &message,
                       Timestamp)
-  {
-      LOG_INFO << "onGroupResponse: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onGroupResponse: " << QString::fromStdString(message->GetTypeName());
 
-      if (message->success())
-      {
-          std::string operation;
-          switch (message->operation()) {
-              case chat::GroupOperation::CREATE:
-                  operation = "Create group";
-                  break;
-              case chat::GroupOperation::JOIN:
-                  operation = "Join group";
-                  break;
-              case chat::GroupOperation::LEAVE:
-                  operation = "Leave group";
-                  break;
-              case chat::GroupOperation::QUERY:
-                  operation = "Query groups";
-                  break;
-              default:
-                  operation = "Unknown command";
-                  break;
-          }
-          LOG_INFO << operation << " succeeded";
-      }
-      else
-      {
-          LOG_ERROR << "Group operation failed: " << message->error_message();
-      }
+    if (message->success())
+    {
+        std::string operation;
+        switch (message->operation()) {
+            case chat::GroupOperation::CREATE:
+                operation = "Create group";
+                break;
+            case chat::GroupOperation::JOIN:
+                operation = "Join group";
+                break;
+            case chat::GroupOperation::LEAVE:
+                operation = "Leave group";
+                break;
+            case chat::GroupOperation::QUERY:
+                operation = "Query groups";
+                break;
+            default:
+                operation = "Unknown command";
+                break;
+        }
+        ChatLogInfo() << QString::fromStdString(operation) << " succeeded";
+    }
+    else
+    {
+        ChatLogInfo() << "Group operation failed: " << QString::fromStdString(message->error_message());
+    }
       std::vector<std::string> groups;
-      if (message->joined_groups_size() > 0)
-      {
-          for (const auto &group : message->joined_groups())
-          {
+    if (message->joined_groups_size() > 0)
+    {
+        for (const auto &group : message->joined_groups())
+        {
                 groups.push_back(group);
-          }
-      }
-        emit groupResponseReceived(message->success(), message->operation(),groups);
-  }
+        }
+    }
+        emit groupResponseReceived(message->success(), message->operation(), message->error_message(), groups);
+}
 
-  void ChatClient::onTextMessage(const TcpConnectionPtr &conn,
+void ChatClient::onTextMessage(const TcpConnectionPtr &conn,
                      const TextMessagePtr &message,
                      Timestamp)
-  {
-    LOG_INFO << "onTextMessage: " << message->GetTypeName();
+{
+    ChatLogInfo() << "onTextMessage: " << QString::fromStdString(message->GetTypeName());
     bool is_group = message->target_type() == chat::TargetType::GROUP;
     std::string group;
     if (message->target_type() == chat::TargetType::USER){
@@ -213,13 +216,12 @@ void ChatClient::onGroupResponse(const TcpConnectionPtr &conn,
     {
         group = message->target();
     }
-    printf("<<< %s [%s] %s\n", group.c_str(), message->sender().c_str(), ac_.filter(message->content()).c_str());
-    emit textMessageReceived(is_group, group, message->sender(), message->content());
-  }
+    emit textMessageReceived(is_group, group, message->sender(), ac_.filter(message->content()));
+}
 
-  void ChatClient::onUnknownMessageType(const TcpConnectionPtr &conn,
+void ChatClient::onUnknownMessageType(const TcpConnectionPtr &conn,
                             const MessagePtr &message,
                             Timestamp)
-  {
-    LOG_INFO << "onUnknownMessageType: " << message->GetTypeName();
-  }
+{
+    ChatLogInfo() << "onUnknownMessageType: " << QString::fromStdString(message->GetTypeName());
+}

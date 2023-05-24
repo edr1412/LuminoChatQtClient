@@ -24,18 +24,9 @@ public:
     QPoint mouseWindowTopLeft; //鼠标相对窗口左上角的坐标         在mousePressEvent 得到
     QPoint mouseDeskTopLeft;   //鼠标相对于桌面左上角坐标         在mouseMoveEvent实时获取
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
+signals:
+    void sendRegistMessageRequest(const std::string &username, const std::string &password);
 
-public:
-    UserInfo getUserInfo(){
-        return userInfo;
-    }
-    bool getStatus(){
-        return m_status;
-    }
-
-private slots:
-    void disconnectedSlot();
-    void readyReadSlot();
 private slots:
     void on_pushBtn_regist_clicked();
 
@@ -45,12 +36,8 @@ private slots:
 
 private:
     void Init();
-    void writeMsg(void*buf,int bufLen,int type);
 private:
     Ui::RegistDlg *ui;
-    QTcpSocket *socket;
-    UserInfo userInfo;
-    bool m_status;       //注册成功或者失败
 };
 
 #endif // REGISTDLG_H

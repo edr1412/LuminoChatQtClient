@@ -17,18 +17,20 @@ public:
     explicit AddFriendDialog(QWidget *parent = nullptr);
     ~AddFriendDialog();
 public:
-    AddFriendInfoReq getAddFriendInfoReq(){
-        return m_addFriendInfoReq;
+    std::string getFriendName(){
+        return selected_friend_name_;
     }
+public slots:
+    void onSearchResponseReceived(const std::vector<std::string> &usernames);
 private slots:
     void on_pushButton_find_clicked();
 
     void on_pushButton_addFriend_clicked();
 signals:
-    void signal_findUserInfo(int account);
+    void sendSearchMessageRequest(const std::string &pattern);
 private:
     Ui::AddFriendDialog *ui;
-    AddFriendInfoReq m_addFriendInfoReq;
+    std::string selected_friend_name_;
 };
 
 #endif // ADDFRIENDDIALOG_H

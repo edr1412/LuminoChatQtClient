@@ -6,6 +6,7 @@
 #include "common.h"
 #include "logindlg.h"
 #include "addfrienddialog.h"
+#include "chatclient.h"
 #include <map>
 #include <list>
 
@@ -18,11 +19,11 @@ typedef enum{
 }EChatType;
 
 struct chatWidgetInfo{
-    int m_account;  //聊天窗口对应的聊天号
+    std::string m_account;  //聊天窗口对应的聊天号
     EChatType m_type;     //聊天窗口对应的类型 群聊/私聊
 };
 
-typedef std::map<int,QListWidget*> mapChatWidget;
+typedef std::map<std::string,QListWidget*> mapChatWidget;
 typedef std::list<chatWidgetInfo*> listChatWidgetInfo;
 
 class Widget : public QWidget
@@ -42,14 +43,14 @@ public:
     QPoint mouseDeskTopLeft;   //鼠标相对于桌面左上角坐标         在mouseMoveEvent实时获取
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
 
-private slots:
+public slots:
     void onLoginResponseReceived(bool success, const std::string &username);
-    void onLogoutResponseReceived(bool success);
     void onRegistResponseReceived(bool success);
     void onTextMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content);
-    void onTextMessageResponseReceived(bool success);
-    void onSearchResponseReceived(const std::vector<std::string> &usernames);
-    void onGroupResponseReceived(bool success, const std::string& operation, const std::vector<std::string> &groups);
+    void onGroupResponseReceived(bool success, const std::string& operation, const std::string& error_message, const std::vector<std::string> &groups);
+    void onSendSearchMessageRequest(const std::string &pattern);
+    void onSendLoginMessageRequest(const std::string &username, const std::string &password);
+    void onSendRegistMessageRequest(const std::string &username, const std::string &password);
 private slots:
     int handleMsg(recvMsg *rMsg);
     void on_pushBtn_send_clicked();
@@ -66,13 +67,9 @@ private slots:
 private:
     void Init();
     void InitUI();
-    int  login();
-    void Init_Group_Info(GroupChatInfo* groupInfo);
-    void Init_Friend_Info(FriendInfo* friendInfo);
-    void writeMsg(void*buf,int bufLen,int type, int error = 0,int mode = 1);
-private:
-    void getGroupList();
-    void getFriendList();
+    void Add_Group_Item(const std::string& group);
+    void Add_Friend_Item(const std::string& username);
+
 public:
     int getLoginStatus(){
         return hasLogin_;
@@ -80,19 +77,7 @@ public:
 #if 0
     GroupUserInfo* findUserInfo(int account);
 #endif
-private:
-    int handleRegiste(void*msg);
-    int handleLogin(void*msg);
-    int handleLogout(void*msg);
-    int handleGroupChat(void*msg);
-    int handlePrivateChat(void*msg);
-    int getGroupList(void*msg);
-    int getGroupInfo(void* msg);
-    int getFriendInfo(void* msg);
 
-
-    int handleAddFriendReq(void*msg);
-    int handleAddFriendResp(void*msg);
 private:
     Ui::Widget *ui;
     EventLoopThread loopThread_;
@@ -102,7 +87,9 @@ private:
     bool        m_isfull;
     QRect       m_rect;
 
-    mapChatWidget           m_chatWigetMap;     //聊天列表
+    mapChatWidget           m_chatWigetMapPrivate;     //用户名, QListWidget*
+    mapChatWidget           m_chatWigetMapGroup;     //用户名, QListWidget*
+
     listChatWidgetInfo      m_chatWidgetInfoList;
 };
 #endif // WIDGET_H
