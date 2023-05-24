@@ -43,11 +43,16 @@ public:
     QPoint windowDeskTopLeft;  //窗口左上角相对于桌面左上角坐标    在mouseMoveEvent实时计算(矢量)获得
 
 private slots:
-    void disconnectedSlot();
-    void readyReadSlot();
-    void on_pushBtn_send_clicked();
+    void onLoginResponseReceived(bool success, const std::string &username);
+    void onLogoutResponseReceived(bool success);
+    void onRegistResponseReceived(bool success);
+    void onTextMessageReceived(bool is_group, const std::string &group, const std::string &sender, const std::string &content);
+    void onTextMessageResponseReceived(bool success);
+    void onSearchResponseReceived(const std::vector<std::string> &usernames);
+    void onGroupResponseReceived(bool success, const std::string& operation, const std::vector<std::string> &groups);
 private slots:
     int handleMsg(recvMsg *rMsg);
+    void on_pushBtn_send_clicked();
     void on_pushButton_addFriend_clicked();
 
     void on_listWidget_info_itemClicked(QListWidgetItem *item);
@@ -70,7 +75,7 @@ private:
     void getFriendList();
 public:
     int getLoginStatus(){
-        return m_isLogin;
+        return hasLogin_;
     }
 #if 0
     GroupUserInfo* findUserInfo(int account);
@@ -93,7 +98,7 @@ private:
     EventLoopThread loopThread_;
     InetAddress serverAddr_;
     ChatClient client_;
-    bool        m_isLogin;
+    bool        hasLogin_;
     bool        m_isfull;
     QRect       m_rect;
 

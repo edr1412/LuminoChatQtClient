@@ -11,7 +11,7 @@ Widget::Widget(QWidget *parent)
     loopThread_(),
     serverAddr_(SERVER_ADDR, SERVER_PORT),
     client_(loopThread_.startLoop(), serverAddr_),
-    m_isLogin(false)
+    hasLogin_(false)
 {
     ui->setupUi(this);
     InitUI();
@@ -70,37 +70,39 @@ void Widget::Init()
     else if (status == QDialog::Rejected)
     {
         ChatLogInfo()<<"close..";
-        this->m_isLogin = false;
+        this->hasLogin_ = false;
     }
 }
 
-
-int Widget::login()
+void Widget::onLoginResponseReceived(bool success, const std::string &username)
 {
-    //登录
-    LoginInfoReq loginInfo;
-    memset(&loginInfo,'\0',sizeof(LoginInfoReq));
-    loginInfo.m_account = m_userInfo.m_account;
-    ChatLogInfo()<<"m_account:"<<loginInfo.m_account<<",password:"<<m_userInfo.m_password;
-    strncpy(loginInfo.m_password,m_userInfo.m_password,strlen(m_userInfo.m_password));
-    writeMsg((char*)&loginInfo,sizeof(LoginInfoReq),CommandEnum_Login);
+    if (success)
+    {
+        this->hasLogin_ = true;
+        this->username_ = username;
+        this->setWindowTitle(QString("WeChat[%1]").arg(QString::fromStdString(username)));
+        sendGroupListRequest();
+        this->show();
 
-    if(this->socket->waitForReadyRead()==false){
-        return -1;
     }
-
-    DeMessageHead header;
-    memset(&header,'\0',sizeof(DeMessageHead));
-    int len = socket->read((char*)&header,sizeof(DeMessageHead));
-    char *p = (char*)malloc(header.length);
-    DeMessagePacket* pPacket = (DeMessagePacket *)p;
-    socket->read((char*)pPacket,header.length);
-    if(pPacket->error == 0){
-        ChatLogInfo()<<"登录成功..";
-        m_isLogin = true;
+    else
+    {
+        this->hasLogin_ = false;
+        // 重新尝试登录
+        LoginDlg* loginDlg = new LoginDlg;
+        loginDlg->setAttribute(Qt::WA_DeleteOnClose);
+        loginDlg->show();
+        int status = loginDlg->exec();
+        if (status == QDialog::Accepted)
+        {
+            ChatLogInfo()<<"wait for server..";
+        }
+        else if (status == QDialog::Rejected)
+        {
+            ChatLogInfo()<<"close..";
+            this->hasLogin_ = false;
+        }
     }
-    free(p);
-    return true;
 }
 
 static int stackWidgetIndex = 0;
@@ -561,7 +563,7 @@ int Widget::handleMsg(recvMsg *rMsg)
             if(packet->mode == 3){
                 handleLogin(rMsg->body + sizeof(DeMessagePacket));
             }else if(packet->mode == 2 && packet->error == 0){
-                m_isLogin = 1;
+                hasLogin_ = 1;
                 ChatLogInfo()<<"登陆成功..";
             }
             break;
