@@ -25,6 +25,8 @@ Widget::Widget(QWidget *parent)
 Widget::~Widget()
 {
     delete ui;
+    client_.disconnect();
+    CurrentThread::sleepUsec(1000*1000);
 }
 
 
@@ -63,6 +65,8 @@ void Widget::Init()
     LoginDlg* loginDlg = new LoginDlg;
     connect(loginDlg, &LoginDlg::sendLoginMessageRequest, this, &Widget::onSendLoginMessageRequest);
     connect(loginDlg, &LoginDlg::sendRegistMessageRequestAsProxy, this, &Widget::onSendRegistMessageRequest);
+    connect(this, &QObject::destroyed, qApp, &QApplication::quit);
+
     loginDlg->setAttribute(Qt::WA_DeleteOnClose);
     loginDlg->show();
     int status = loginDlg->exec();
@@ -74,6 +78,7 @@ void Widget::Init()
     {
         ChatLogInfo()<<"close..";
         this->hasLogin_ = false;
+        this->deleteLater();
     }
 }
 
@@ -82,6 +87,7 @@ void Widget::onLoginResponseReceived(bool success, const QString &username)
     ChatLogInfo()<<"onLoginResponseReceived";
     if (success)
     {
+        ChatLogInfo()<<"login success";
         this->hasLogin_ = true;
         this->username_ = username.toStdString();
         this->setWindowTitle(QString("WeChat[%1]").arg(username));
@@ -92,7 +98,9 @@ void Widget::onLoginResponseReceived(bool success, const QString &username)
     }
     else
     {
+        ChatLogInfo()<<"login failed";
         this->hasLogin_ = false;
+        QMessageBox::information(this, "登录失败", username);
         // 重新尝试登录
         LoginDlg* loginDlg = new LoginDlg;
         connect(loginDlg, &LoginDlg::sendLoginMessageRequest, this, &Widget::onSendLoginMessageRequest);
@@ -108,7 +116,7 @@ void Widget::onLoginResponseReceived(bool success, const QString &username)
         {
             ChatLogInfo()<<"close..";
             this->hasLogin_ = false;
-            this->close();
+            this->deleteLater();
         }
     }
 }

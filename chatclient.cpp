@@ -106,7 +106,7 @@ void ChatClient::onLoginResponse(const TcpConnectionPtr &conn,
     else
     {
         ChatLogInfo() << "Login failed: " << QString::fromStdString(message->error_message());
-      emit loginResponseReceived(true, QString::fromStdString(message->username()));
+      emit loginResponseReceived(false, QString::fromStdString(message->error_message()));
     }
 }
 
