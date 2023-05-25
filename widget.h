@@ -65,6 +65,8 @@ private slots:
 
     void on_pushBtn_max_clicked();
 
+    void on_pushButton_clicked();
+
 private:
     void Init();
     void InitUI();

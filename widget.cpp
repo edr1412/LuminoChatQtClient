@@ -135,9 +135,64 @@ void Widget::onRegistResponseReceived(bool success)
 
 static int stackWidgetIndex = 0;
 
+void Widget::on_pushButton_clicked()
+{
+    //leave group
+    int currentRow = ui->listWidget_info->currentRow();
+    if(currentRow < 0){
+        return;
+    }
+    int isfind = 0;
+    int currentIndex = 0;
+    QListWidget* chatWidget = NULL;
+    chatWidgetInfo* chatInfo = NULL;
+    listChatWidgetInfo::iterator iter;
+    for(iter = m_chatWidgetInfoList.begin();iter!=m_chatWidgetInfoList.end();iter++,currentIndex++){
+        if(currentIndex == currentRow){
+            chatInfo = *iter;
+            isfind = 1;
+            break;
+        }
+    }
+    if(isfind){
+    }
+    else {
+        ChatLogInfo()<<"---------notfind----------";
+        return ;
+    }
+
+    if(chatInfo->m_type != TYPE_GROUP_CHAT){
+        return ;
+    }
+    std::string current_group = chatInfo->m_account;
+    std::string command = "group leave " + current_group;
+    ChatLogInfo()<<"command: "<<QString::fromStdString(command);
+    client_.send(command);
+
+    //删除stackedWidget_Msg中索引为 currentRow 的对象
+    ui->stackedWidget_Msg->removeWidget(ui->stackedWidget_Msg->widget(currentRow));
+    ui->stackedWidget_Msg->setCurrentIndex(currentRow-1);
+    //删除listWidget_info中索引为 currentRow 的对象
+    QListWidgetItem* item = ui->listWidget_info->takeItem(currentRow);
+    delete item;
+    ui->listWidget_info->setCurrentRow(currentRow-1);
+    //从m_chatWidgetInfoList中删除索引为 currentRow 的对象
+    m_chatWidgetInfoList.erase(iter);
+    //从m_chatWigetMapGroup中删除索引为 current_group 的pair
+    m_chatWigetMapGroup.erase(current_group);
+    
+    stackWidgetIndex--;
+
+}
+
+
 void Widget::Add_Group_Item(const std::string& group)
 {
     ui->listWidget_info->addItem(QString("[群][%1]").arg(group.c_str()));
+
+    // 记录当前 stackedWidget_Msg 的index 和 listWidget_info的row
+    int index = ui->stackedWidget_Msg->currentIndex();
+    int row = ui->listWidget_info->currentRow();
 
     ui->stackedWidget_Msg->setCurrentIndex(stackWidgetIndex++);
     if(stackWidgetIndex >=ui->stackedWidget_Msg->count())
@@ -165,7 +220,9 @@ void Widget::Add_Group_Item(const std::string& group)
 
     m_chatWidgetInfoList.push_back(chatInfo);
 
-    ui->listWidget_info->setCurrentRow(stackWidgetIndex - 1);
+    //ui->listWidget_info->setCurrentRow(stackWidgetIndex - 1);
+    ui->stackedWidget_Msg->setCurrentIndex(index);
+    ui->listWidget_info->setCurrentRow(row);
 }
 
 void Widget::Add_Friend_Item(const std::string& username)
