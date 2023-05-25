@@ -3,7 +3,8 @@
 
 AddFriendDialog::AddFriendDialog(QWidget *parent) :
     QDialog(parent),
-    ui(new Ui::AddFriendDialog)
+    ui(new Ui::AddFriendDialog),
+    selected_friend_name_("")
 {
     ui->setupUi(this);
     this->setWindowTitle("WeChat 查找");
@@ -41,5 +42,25 @@ void AddFriendDialog::on_pushButton_addFriend_clicked()
         return;
     }
     selected_friend_name_ = ui->listWidget->selectedItems().front()->text().toStdString();
+    return accept();    //Closes the dialog and emits the accepted() signal.
+}
+
+void AddFriendDialog::on_pushButton_create_clicked()
+{
+    ChatLogInfo()<<"on_pushButton_create_clicked";
+    if (ui->lineEdit_groupname->text().isEmpty()) {
+        return;
+    }
+    emit sendGroupOperationRequest("create", ui->lineEdit_groupname->text());
+    return accept();    //Closes the dialog and emits the accepted() signal.
+}   
+
+void AddFriendDialog::on_pushButton_join_clicked()
+{
+    ChatLogInfo()<<"on_pushButton_join_clicked";
+    if (ui->lineEdit_groupname->text().isEmpty()) {
+        return;
+    }
+    emit sendGroupOperationRequest("join", ui->lineEdit_groupname->text());
     return accept();    //Closes the dialog and emits the accepted() signal.
 }

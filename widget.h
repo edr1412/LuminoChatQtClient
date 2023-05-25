@@ -50,6 +50,7 @@ public slots:
     void onTextMessageReceived(bool is_group, const QString &group, const QString &sender, const QString &content);
     void onGroupResponseReceived(bool success, const QString& operation, const QString& error_message, const QStringList &groups);
     void onSendSearchMessageRequest(const QString &pattern);
+    void onSendGroupOperationRequest(const QString &operation, const QString &group_name);
     void onSendLoginMessageRequest(const QString &username, const QString &password);
     void onSendRegistMessageRequest(const QString &username, const QString &password);
 private slots:

@@ -330,12 +330,16 @@ void Widget::on_pushButton_addFriend_clicked()
     AddFriendDialog* addFriendDlg = new AddFriendDialog();
     connect(&client_, &ChatClient::searchResponseReceived, addFriendDlg, &AddFriendDialog::onSearchResponseReceived);
     connect(addFriendDlg, &AddFriendDialog::sendSearchMessageRequest, this, &Widget::onSendSearchMessageRequest);
+    connect(addFriendDlg, &AddFriendDialog::sendGroupOperationRequest, this, &Widget::onSendGroupOperationRequest);
 
     addFriendDlg->show();
     if(addFriendDlg->exec() == QDialog::Accepted)
     {
         std::string username = addFriendDlg->getFriendName();
-        Add_Friend_Item(username);
+        if(!username.empty())
+        {
+            Add_Friend_Item(username);
+        }
     }
 }
 
@@ -343,6 +347,13 @@ void Widget::onSendSearchMessageRequest(const QString &pattern)
 {
     ChatLogInfo()<<"onSendSearchMessageRequest";
     std::string command = "search " + pattern.toStdString();
+    ChatLogInfo()<<"command:"<<command.c_str();
+    client_.send(command);
+}
+void Widget::onSendGroupOperationRequest(const QString &operation, const QString &group_name)
+{
+    ChatLogInfo()<<"onSendGroupOperationRequest";
+    std::string command = "group " + operation.toStdString() + " " + group_name.toStdString();
     ChatLogInfo()<<"command:"<<command.c_str();
     client_.send(command);
 }

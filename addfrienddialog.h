@@ -26,8 +26,11 @@ private slots:
     void on_pushButton_find_clicked();
 
     void on_pushButton_addFriend_clicked();
+    void on_pushButton_create_clicked();
+    void on_pushButton_join_clicked();
 signals:
     void sendSearchMessageRequest(const QString &pattern);
+    void sendGroupOperationRequest(const QString &operation, const QString &group_name);
 private:
     Ui::AddFriendDialog *ui;
     std::string selected_friend_name_;
