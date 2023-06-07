@@ -43,7 +43,7 @@ using namespace std;
 /**
   * 暂时用宏定义代替，后续通过读取配置文件获取
   */
-#define SERVER_ADDR "172.16.61.131" //这是我的服务器地址，需要修改为你启动服务器的地址
+#define SERVER_ADDR "172.16.61.131"
 #define SERVER_PORT 1145
 
 const std::vector<std::string> WordsWeHate = {"Steve Jobs", "Tim Cook", "Jony Ive", "Apple Inc.", "iPhone", "iPad", "MacBook", "iMac", "Apple Watch", "iOS", "macOS", "Safari", "Apple Music", "HomePod", "iCloud", "乔布斯", "蒂姆·库克", "强尼·艾维", "苹果公司", "苹果手机", "苹果平板", "麦金塔电脑"};
